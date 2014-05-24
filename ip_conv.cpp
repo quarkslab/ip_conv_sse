@@ -236,6 +236,58 @@ bool ip_conv_sse(const char* str, uint32_t* res)
 	return true;
 }
 
+unsigned int inetaddr_host(const char *text)
+{
+	const unsigned int ascii_zero = ('0' << 24) | ('0' << 16) | ('0' << 8) | '0';
+	register unsigned int dig100, dig10, dig1;
+	int s;
+	const char *p;
+
+	dig1 = dig10 = dig100 = ascii_zero;
+	s = 24;
+
+	p = text;
+	while (1) {
+		if (((unsigned)(*p - '0')) <= 9) {
+			p++;
+			continue;
+		}
+
+		/* here, we have a complete byte between <text> and
+
+		   (exclusive) */
+
+		if (text == p)
+			goto end;
+		text++;
+		dig1 |= (unsigned int)(p[-1] << s);
+
+		if (text == p)
+			goto end;
+		text++;
+		dig10 |= (unsigned int)(p[-2] << s);
+
+		if (text == p)
+			goto end;
+		dig100 |= (unsigned int)(p[-3] << s);
+end:
+		s -= 8;
+
+		if (*p != '.')
+			break;
+
+		text = ++p;
+
+		if (s < 0)
+			break;
+	}
+
+	dig100 -= ascii_zero;
+	dig10 -= ascii_zero;
+	dig1 -= ascii_zero;
+	return ((dig100 * 10) + dig10) * 10 + dig1;
+}
+
 template <class Func>
 bool verify(const char* name, char** strs, size_t n, Func const& f)
 {
@@ -308,6 +360,12 @@ int main(int argc, char** argv)
 			uint32_t res;
 			ip_conv_sse(s, &res);
 			return res;
+		});
+
+	bench("haproxy", strs, n,
+		[](const char* s)
+		{
+			return inetaddr_host(s);
 		});
 
 	free_strs(strs, n);
